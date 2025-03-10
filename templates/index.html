@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTC期权套利监控系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 20px;
+            background-color: #f8f9fa;
+        }
+        .card {
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .card-header {
+            font-weight: bold;
+            background-color: #f1f8ff;
+        }
+        .opportunity-row:hover {
+            background-color: #f1f8ff;
+        }
+        .positive-rate {
+            color: #28a745;
+        }
+        .negative-rate {
+            color: #dc3545;
+        }
+        .refresh-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .filter-form {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center mb-4">BTC期权套利监控系统</h1>
+        
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">系统信息</div>
+                    <div class="card-body">
+                        <p><strong>当前BTC价格:</strong> ${{ "%.2f"|format(btc_price) }}</p>
+                        <p><strong>当前时间:</strong> {{ current_time }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">筛选设置</div>
+                    <div class="card-body">
+                        <form class="filter-form" action="/" method="get">
+                            <div class="mb-3">
+                                <label for="min_rate" class="form-label">最低年化收益率 (%)</label>
+                                <input type="number" class="form-control" id="min_rate" name="min_rate" step="0.01" value="{{ min_rate }}">
+                            </div>
+                            <button type="submit" class="btn btn-primary">应用筛选</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 实时套利机会 -->
+        <h2 class="mb-3">实时套利机会</h2>
+        {% if opportunities %}
+            {% for expiry_date, opps in opportunities.items() %}
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>到期日: {{ expiry_date }}</span>
+                        <span>剩余天数: {{ "%.2f"|format(opps[0].days_to_expiry) }}</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>执行价格</th>
+                                        <th>合成多头价格</th>
+                                        <th>多头价差</th>
+                                        <th>多头年化收益率</th>
+                                        <th>合成空头价格</th>
+                                        <th>空头价差</th>
+                                        <th>空头年化收益率</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for opp in opps %}
+                                        <tr class="opportunity-row">
+                                            <td>${{ "%.2f"|format(opp.strike_price) }}</td>
+                                            <td>${{ "%.2f"|format(opp.synthetic_long_price) }}</td>
+                                            <td>${{ "%.2f"|format(opp.long_price_diff) }}</td>
+                                            <td class="{% if opp.long_annual_rate > 0 %}positive-rate{% else %}negative-rate{% endif %}">
+                                                {{ "%.2f"|format(opp.long_annual_rate * 100) }}%
+                                            </td>
+                                            <td>${{ "%.2f"|format(opp.synthetic_short_price) }}</td>
+                                            <td>${{ "%.2f"|format(opp.short_price_diff) }}</td>
+                                            <td class="{% if opp.short_annual_rate > 0 %}positive-rate{% else %}negative-rate{% endif %}">
+                                                {{ "%.2f"|format(opp.short_annual_rate * 100) }}%
+                                            </td>
+                                            <td>
+                                                <form action="/save_opportunity" method="post">
+                                                    <input type="hidden" name="call_option_id" value="{{ opp.call_option_id }}">
+                                                    <input type="hidden" name="put_option_id" value="{{ opp.put_option_id }}">
+                                                    <input type="hidden" name="expiry_date" value="{{ opp.expiry_date }}">
+                                                    <input type="hidden" name="strike_price" value="{{ opp.strike_price }}">
+                                                    <input type="hidden" name="btc_price" value="{{ opp.btc_price }}">
+                                                    <input type="hidden" name="synthetic_long_price" value="{{ opp.synthetic_long_price }}">
+                                                    <input type="hidden" name="synthetic_short_price" value="{{ opp.synthetic_short_price }}">
+                                                    <input type="hidden" name="long_price_diff" value="{{ opp.long_price_diff }}">
+                                                    <input type="hidden" name="short_price_diff" value="{{ opp.short_price_diff }}">
+                                                    <input type="hidden" name="long_annual_rate" value="{{ opp.long_annual_rate }}">
+                                                    <input type="hidden" name="short_annual_rate" value="{{ opp.short_annual_rate }}">
+                                                    <input type="hidden" name="days_to_expiry" value="{{ opp.days_to_expiry }}">
+                                                    <input type="hidden" name="call_ask" value="{{ opp.call_ask }}">
+                                                    <input type="hidden" name="call_bid" value="{{ opp.call_bid }}">
+                                                    <input type="hidden" name="put_ask" value="{{ opp.put_ask }}">
+                                                    <input type="hidden" name="put_bid" value="{{ opp.put_bid }}">
+                                                    <button type="submit" class="btn btn-sm btn-success">保存</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="alert alert-info">当前没有符合条件的套利机会</div>
+        {% endif %}
+
+        <!-- 已保存的套利机会 -->
+        <h2 class="mb-3">已保存的套利机会</h2>
+        {% if saved_opportunities %}
+            {% for expiry_date, opps in saved_opportunities.items() %}
+                <div class="card mb-4">
+                    <div class="card-header">
+                        到期日: {{ expiry_date }}
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>保存时间</th>
+                                        <th>执行价格</th>
+                                        <th>BTC价格</th>
+                                        <th>多头年化收益率</th>
+                                        <th>空头年化收益率</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for opp in opps %}
+                                        {% if opp.short_annual_rate >= min_rate %}
+                                        <tr class="opportunity-row">
+                                            <td>{{ opp.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                            <td>${{ "%.2f"|format(opp.strike_price) }}</td>
+                                            <td>${{ "%.2f"|format(opp.btc_price) }}</td>
+                                            <td class="{% if opp.long_annual_rate > 0 %}positive-rate{% else %}negative-rate{% endif %}">
+                                                {{ "%.2f"|format(opp.long_annual_rate * 100) }}%
+                                            </td>
+                                            <td class="{% if opp.short_annual_rate > 0 %}positive-rate{% else %}negative-rate{% endif %}">
+                                                {{ "%.2f"|format(opp.short_annual_rate * 100) }}%
+                                            </td>
+                                            <td>
+                                                <form action="/delete_opportunity/{{ opp.id }}" method="post">
+                                                    <button type="submit" class="btn btn-sm btn-danger">删除</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                        {% endif %}
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="alert alert-info">没有已保存的套利机会</div>
+        {% endif %}
+
+        <!-- 刷新按钮 -->
+        <a href="/refresh?min_rate={{ min_rate }}" class="btn btn-primary btn-lg refresh-btn">
+            <i class="bi bi-arrow-clockwise"></i> 刷新数据
+        </a>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 自动刷新页面（每60秒）
+        setTimeout(function() {
+            window.location.href = '/refresh?min_rate={{ min_rate }}';
+        }, 60000);
+    </script>
+</body>
+</html>
